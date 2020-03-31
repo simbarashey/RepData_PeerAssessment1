@@ -1,0 +1,236 @@
+---
+title: "Reproducible Research: Peer Assessment 1"
+author: Simbarashe
+output: 
+  html_document:
+    keep_md: true
+---
+
+
+## Loading and preprocessing the data
+First the required libraries have to be loaded, in this case data.table and ggplot2 are needed
+Then the data has to be loaded and pre-processed before analysis
+
+
+```r
+library(data.table)
+```
+
+```
+## Warning: package 'data.table' was built under R version 3.6.2
+```
+
+```r
+library(ggplot2)
+```
+
+```
+## Warning: package 'ggplot2' was built under R version 3.6.3
+```
+
+```r
+if (!file.exists("./repdata_data_activity")) {
+    download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip", destfile = "repdata_data_activity.zip")
+    unzip("repdata_data_activity.zip", exdir = "repdata_data_activity")    
+}
+repdata <- data.table(read.csv("./repdata_data_activity/activity.csv", 
+                    header = T, 
+                    na.strings = "NA", 
+                    nrows = 17569))
+```
+
+
+## What is mean total number of steps taken per day?
+To do this, we need to group/aggregate the data by date
+
+1. Calculate the total number of steps taken per day
+To do this, we need to group/aggregate the data by date then find the total steps in each day
+
+```r
+daily_steps <- aggregate(steps ~ date, data = repdata, FUN = sum, na.action = na.pass)
+head(daily_steps, 12)  
+```
+
+```
+##          date steps
+## 1  2012-10-01    NA
+## 2  2012-10-02   126
+## 3  2012-10-03 11352
+## 4  2012-10-04 12116
+## 5  2012-10-05 13294
+## 6  2012-10-06 15420
+## 7  2012-10-07 11015
+## 8  2012-10-08    NA
+## 9  2012-10-09 12811
+## 10 2012-10-10  9900
+## 11 2012-10-11 10304
+## 12 2012-10-12 17382
+```
+
+2. If you do not understand the difference between a histogram and a barplot, research the difference between them. Make a histogram of the total number of steps taken each day. 
+
+```r
+ggplot2::ggplot(data = daily_steps) + 
+    geom_histogram(mapping = aes(x = steps), fill = "maroon") +
+    labs(title = "Daily Steps", y = "frequency") +
+    theme(panel.grid.minor.x = element_blank()) +
+    theme(panel.grid.major.x = element_blank()) +
+    theme(panel.background = element_rect(fill = "pink")) +
+    theme(plot.title = element_text(hjust = 0.5) )
+```
+
+```
+## `stat_bin()` using `bins = 30`. Pick better value with `binwidth`.
+```
+
+```
+## Warning: Removed 8 rows containing non-finite values (stat_bin).
+```
+
+![](PA1_template_files/figure-html/unnamed-chunk-3-1.png)<!-- -->
+
+3. Calculate and report the mean and median of the total number of steps taken per day
+
+```r
+average_daily_steps <- summary(daily_steps$steps)[[4]]
+med_daily_steps <- summary(daily_steps$steps)[[3]]
+average_daily_steps
+```
+
+```
+## [1] 10766.19
+```
+
+```r
+med_daily_steps
+```
+
+```
+## [1] 10765
+```
+
+
+## What is the average daily activity pattern?
+1. Make a time series plot (i.e. 𝚝𝚢𝚙𝚎 = "𝚕") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+To do this we first needed to group the data by intervals, calculating the mean of the steps in each.
+
+```r
+steps_intervals <-  aggregate(steps ~ interval, FUN = mean, data = repdata, na.action = na.omit)
+ggplot2::ggplot(data = steps_intervals, mapping = aes(x = interval, y = steps)) + 
+    geom_line(colour = "maroon")  +
+    labs(title = "Trend of Average Interval Steps in a Day") +
+    theme(plot.title = element_text(hjust = 0.5))
+```
+
+![](PA1_template_files/figure-html/unnamed-chunk-5-1.png)<!-- -->
+
+2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+```r
+interval_max <- steps_intervals[which.max(steps_intervals$steps), "interval"]
+interval_max
+```
+
+```
+## [1] 835
+```
+
+## Imputing missing values
+1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with \color{red}{\verb|NA|}NAs)
+
+```r
+missing_cases <- sum(!complete.cases(repdata))
+missing_cases
+```
+
+```
+## [1] 2304
+```
+
+2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+In thisc ase, the strategy was to use the mean for the 5-minute interval across all days and use that to impute missing values.
+A duplicate copy of the original data table was made before the operation
+
+```r
+repdata2 <- repdata
+repdata2[, steps:= as.numeric(repdata2$steps)]
+for (i in 1:nrow(repdata2)) {
+    if (is.na(repdata[i, "steps"])) {
+        repdata2[i, "steps"] <- steps_intervals[steps_intervals$interval == repdata[i, interval], "steps"]
+    }
+}
+```
+
+3. Create a new dataset that is equal to the original dataset but with the missing data filled in.
+Here the new dataset is written out into the same folder with the original data set
+
+```r
+data.table::fwrite(repdata2, file = "./repdata_data_activity/activity_complete.csv", quote = FALSE)
+```
+
+4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+So the sum of the number of steps is calcuated per day using the aggregate() function, then a histogram of the sum is made.
+
+```r
+daily_steps2 <- aggregate(steps ~ date, data = repdata2, FUN = sum, na.action = na.pass)
+ggplot2::ggplot(data = daily_steps2) + 
+    geom_histogram(mapping = aes(x = steps), fill = "blue", binwidth = 1000) +
+    theme(panel.grid.minor.x = element_blank()) +
+    theme(panel.grid.major.x = element_blank()) +
+    theme(panel.background = element_rect(fill = "cyan"))
+```
+
+![](PA1_template_files/figure-html/unnamed-chunk-10-1.png)<!-- -->
+
+```r
+med_daily_steps2 <- summary(daily_steps2$steps)[[3]]
+average_daily_steps2 <- summary(daily_steps2$steps)[[4]]
+```
+Estimate | Mean Steps | Median_Steps
+--- | --- | ---
+With Missing Values | 1.0766189\times 10^{4} | 1.0765\times 10^{4}
+With imputed Values | 1.0766189\times 10^{4}  | 1.0766189\times 10^{4}
+
+From the table, it seems the mean does not change (not suprising), however the median value is slightly displaced.
+
+
+
+## Are there differences in activity patterns between weekdays and weekends?
+1. Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.
+First, the date variable has to be changed to date class from factor.
+Then the function below adds two variables to each observation, one for the weekday and another for the type of day
+
+```r
+repdata2[,date:= as.Date(date, "%Y-%m-%d")]
+for (i in 1:nrow(repdata2)) {
+    repdata2[i, day_of_week:= weekdays(repdata2[i, date], F)]
+    if (weekdays(repdata2[i, date], F) == "Saturday" | weekdays(repdata2[i, date], F) == "Sunday") {
+        repdata2[i, day_type:= factor("weekend")] 
+    }
+    else (repdata2[i, day_type:= factor("weekday")])
+}
+```
+
+2. Make a panel plot containing a time series plot (i.e. \color{red}{\verb|type = "l"|}type="l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). See the README file in the GitHub repository to see an example of what this plot should look like using simulated data.
+
+To do this, two data tables are made, one for each type of day. Then in each of these, the  data is aggregated by the interval and the mean number of steps in each is calculated. The two are then combined and a panel plot created.
+
+
+```r
+wkdys_data <- repdata2[day_type == "weekday", ]
+wknds_data <- repdata2[day_type == "weekend", ]
+steps_wkdys <- data.table(aggregate(steps ~ interval, FUN = mean, data = wkdys_data))
+steps_wkdys <- steps_wkdys[, day_type:= factor("weekday")]
+steps_wknds <- data.table(aggregate(steps ~ interval, FUN = mean, data = wknds_data))
+steps_wknds <- steps_wknds[, day_type:= factor("weekend")]
+steps_combined <- rbind(steps_wkdys, steps_wknds)
+ggplot2::ggplot(data = steps_combined, mapping = aes(x = interval, y = steps)) + 
+    geom_line(aes(colour = day_type)) + facet_grid(day_type~.) + 
+    labs(title = "Average Daily Steps by Day Type", color='Type of Day') +
+    ylab("mean number of steps") + xlab("5 minute Interval") +
+    theme(panel.grid.minor.x = element_blank()) +
+    theme(panel.grid.major.x = element_blank()) +
+    theme(plot.title = element_text(hjust = 0.5))
+```
+
+![](PA1_template_files/figure-html/unnamed-chunk-12-1.png)<!-- -->
